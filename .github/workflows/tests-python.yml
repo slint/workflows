@@ -39,23 +39,38 @@ jobs:
       DB: ${{ matrix.db-service }}
       SEARCH: ${{ matrix.search-service }}
       EXTRAS: ${{ inputs.extras }},${{ matrix.search-service }}
+      UV_CACHE_DIR: /tmp/.uv-cache
+      UV_SYSTEM_PYTHON: 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          # TODO: Not sure if we should cache both the Python and uv installations
           cache: pip
           cache-dependency-path: setup.cfg
 
+      - name: Restore uv cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('setup.cfg') }}
+
       - name: Install dependencies
         run: |
-          pip install ".[$EXTRAS]"
-          pip freeze
+          uv pip install ".[$EXTRAS]"
+          uv pip list
           docker version
 
       - name: Run tests
         run: ./run-tests.sh
+
+      - name: Minimize uv cache
+        run: uv cache prune --ci
